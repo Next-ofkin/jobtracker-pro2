@@ -10,11 +10,11 @@ JobTracker Pro helps you organize and monitor your job applications. The app is 
 npm install
 ```
 
-2. Create a `.env.local` file in the project root and add your Supabase credentials:
+2. Create a `.env.local` file in the project root and add your Supabase credentials. These variables must be prefixed with `NEXT_PUBLIC_` so that Next.js can expose them to the browser:
 
 ```bash
-SUPABASE_URL=<your-project-url>
-SUPABASE_ANON_KEY=<your-anon-key>
+NEXT_PUBLIC_SUPABASE_URL=<your-project-url>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 ```
 
 3. Start the development server:
