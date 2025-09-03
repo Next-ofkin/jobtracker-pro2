@@ -17,6 +17,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
   }
 
+  // Validate file type and size
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+  if (file.type !== "application/pdf") {
+    return NextResponse.json(
+      { error: "Only PDF files are allowed" },
+      { status: 400 }
+    );
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    return NextResponse.json(
+      { error: "File size exceeds 5MB" },
+      { status: 400 }
+    );
+  }
+
   // ✅ store in subfolder "cv/<user_id>.pdf"
   const filePath = `cv/${user.id}.pdf`;
 
