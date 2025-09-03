@@ -12,9 +12,27 @@ export default function UploadCV() {
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
   const router = useRouter();
 
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+  function validateFile(f: File) {
+    if (f.type !== "application/pdf") {
+      toast.error("Only PDF files are allowed");
+      return false;
+    }
+    if (f.size > MAX_FILE_SIZE) {
+      toast.error("File size exceeds 5MB");
+      return false;
+    }
+    return true;
+  }
+
   async function handleUpload() {
     if (!file) {
       toast.error("Please select a PDF file first");
+      return;
+    }
+
+    if (!validateFile(file)) {
       return;
     }
 
@@ -48,7 +66,8 @@ export default function UploadCV() {
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
-          if (e.dataTransfer.files?.[0]) setFile(e.dataTransfer.files[0]);
+          const f = e.dataTransfer.files?.[0];
+          if (f && validateFile(f)) setFile(f);
         }}
       >
         <input
@@ -57,7 +76,14 @@ export default function UploadCV() {
           className="hidden"
           id="cv-input"
           // single file only (no multiple attribute)
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            const f = e.target.files?.[0] ?? null;
+            if (f && validateFile(f)) {
+              setFile(f);
+            } else {
+              setFile(null);
+            }
+          }}
         />
         <label
           htmlFor="cv-input"
