@@ -2,7 +2,9 @@
 import { redirect } from "next/navigation";
 import { createServerClientWithCookies } from "@/lib/supabase-server";
 import JobsTable from "@/components/JobsTable";
-import type { Job } from "@/types/job";
+import type { Database } from "@/types/database";
+
+type Job = Database["public"]["Tables"]["jobs"]["Row"];
 
 const PAGE_SIZE = 10;
 
@@ -43,10 +45,11 @@ export default async function DashboardPage({
   }
 
   // Newest first by posted_at, then created_at as fallback
-  const { data: rows, error, count } = await query
+  const { data: initialJobs, error, count } = await query
     .order("posted_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .range(from, to);
+    .range(from, to)
+    .returns<Job[]>();
 
   if (error) {
     return (
@@ -57,24 +60,7 @@ export default async function DashboardPage({
     );
   }
 
-  // Strongly type the rows without using `any`
-  // (Supabase types aren't generated here, so we assert the shape we store.)
-  const initialJobs: Job[] = (rows ?? []).map((r) => ({
-    id: String((r as Record<string, unknown>).id),
-    user_id: String((r as Record<string, unknown>).user_id),
-    title: String((r as Record<string, unknown>).title),
-    company:
-      (r as Record<string, unknown>).company === null
-        ? null
-        : String((r as Record<string, unknown>).company),
-    url: String((r as Record<string, unknown>).url),
-    source: String((r as Record<string, unknown>).source),
-    created_at: String((r as Record<string, unknown>).created_at),
-    posted_at:
-      (r as Record<string, unknown>).posted_at === null
-        ? null
-        : String((r as Record<string, unknown>).posted_at),
-  }));
+  const safeJobs = initialJobs ?? [];
 
   return (
     <section className="mx-auto max-w-5xl p-6">
@@ -85,7 +71,7 @@ export default async function DashboardPage({
 
       <div className="mt-6">
         <JobsTable
-          initialJobs={initialJobs}
+          initialJobs={safeJobs}
           total={count ?? 0}
           page={page}
           pageSize={PAGE_SIZE}
