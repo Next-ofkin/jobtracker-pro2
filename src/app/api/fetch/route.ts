@@ -173,47 +173,53 @@ export async function GET(req: Request) {
   const errors: Record<string, string> = {};
   const stats: Record<string, number> = {};
 
-  // Remotive
-  try {
-    const data = await getJSON<RemotiveResponse>("https://remotive.com/api/remote-jobs");
-    const filtered = normalizeRemotive(data)
-      .filter((j) => j.posted_at && j.posted_at >= cutoff)
-      .filter((j) => matches(j, requireVisa));
-    stats.remotive = filtered.length;
-    results.push(...filtered);
-  } catch (e) {
-    errors.remotive = e instanceof Error ? e.message : String(e);
-  }
+  // fetch both sources in parallel
+  const [remotiveJobs, jobicyJobs] = await Promise.all([
+    getJSON<RemotiveResponse>("https://remotive.com/api/remote-jobs")
+      .then((data) =>
+        normalizeRemotive(data)
+          .filter((j) => j.posted_at && j.posted_at >= cutoff)
+          .filter((j) => matches(j, requireVisa))
+      )
+      .catch((e) => {
+        errors.remotive = e instanceof Error ? e.message : String(e);
+        return [] as NormalizedJob[];
+      }),
+    getJSON<JobicyResponse>("https://jobicy.com/api/v2/remote-jobs")
+      .then((data) =>
+        normalizeJobicy(data)
+          .filter((j) => j.posted_at && j.posted_at >= cutoff)
+          .filter((j) => matches(j, requireVisa))
+      )
+      .catch((e) => {
+        errors.jobicy = e instanceof Error ? e.message : String(e);
+        return [] as NormalizedJob[];
+      }),
+  ]);
 
-  // Jobicy
-  try {
-    const data = await getJSON<JobicyResponse>("https://jobicy.com/api/v2/remote-jobs");
-    const filtered = normalizeJobicy(data)
-      .filter((j) => j.posted_at && j.posted_at >= cutoff)
-      .filter((j) => matches(j, requireVisa));
-    stats.jobicy = filtered.length;
-    results.push(...filtered);
-  } catch (e) {
-    errors.jobicy = e instanceof Error ? e.message : String(e);
-  }
+  stats.remotive = remotiveJobs.length;
+  stats.jobicy = jobicyJobs.length;
+  results.push(...remotiveJobs, ...jobicyJobs);
 
   // dedupe + sort newest first by posted_at
   const normalized = dedupe(results)
     .filter((j) => j.title && j.url && j.posted_at)
     .sort((a, b) => (b.posted_at!.getTime() - a.posted_at!.getTime()));
 
-  let inserted = 0;
-  for (const job of normalized) {
-    const { error } = await supabase.from("jobs").insert({
-      user_id: user.id,
-      title: job.title,
-      company: job.company,
-      url: job.url,
-      source: job.source,
-      posted_at: job.posted_at?.toISOString() ?? null,
-    });
-    if (!error) inserted++;
-  }
+  const rows = normalized.map((job) => ({
+    user_id: user.id,
+    title: job.title,
+    company: job.company,
+    url: job.url,
+    source: job.source,
+    posted_at: job.posted_at?.toISOString() ?? null,
+  }));
+
+  const { error } = await supabase
+    .from("jobs")
+    .upsert(rows, { onConflict: "url" });
+
+  const inserted = error ? 0 : rows.length;
 
   return NextResponse.json({
     success: true,
